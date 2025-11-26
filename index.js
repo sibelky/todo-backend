@@ -1,28 +1,28 @@
-const express = require("express");
-const cors = require("cors");
+import express from "express";
+import cors from "cors";
+import bodyParser from "body-parser";
+
 const app = express();
-
-// Middleware
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-// Beispiel-Daten
-let todos = [
-  { id: 1, task: "Wocheneinkauf erledigen", done: false },
-  { id: 2, task: "Oma anrufen", done: false },
-  { id: 3, task: "Termin beim Zahnarzt vereinbaren", done: false }
-];
+let todos = []; // einfache Array-Datenbank
 
-// Root-Route
-app.get("/", (req, res) => {
-  res.send("Todo-Backend läuft! Verwende /api/todos für die API.");
+app.get("/api/todos", (req, res) => res.json(todos));
+
+app.post("/api/todos", (req, res) => {
+  const todo = { id: Date.now(), task: req.body.task, done: false };
+  todos.push(todo);
+  res.json(todo);
 });
 
-// API-Route
-app.get("/api/todos", (req, res) => {
-  res.json(todos);
+app.put("/api/todos/:id", (req, res) => {
+  const todo = todos.find(t => t.id == req.params.id);
+  if (todo) {
+    todo.done = req.body.done;
+    res.json(todo);
+  } else res.status(404).send("Not found");
 });
 
-// Port setzen (Render setzt process.env.PORT)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server läuft auf Port ${PORT}`));
