@@ -6,9 +6,16 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-let todos = []; // einfache Array-Datenbank
+// ✅ NEU: Root-Route
+app.get("/", (req, res) => {
+  res.send("Backend läuft ✅");
+});
 
-app.get("/api/todos", (req, res) => res.json(todos));
+let todos = [];
+
+app.get("/api/todos", (req, res) => {
+  res.json(todos);
+});
 
 app.post("/api/todos", (req, res) => {
   const todo = { id: Date.now(), task: req.body.task, done: false };
@@ -21,8 +28,12 @@ app.put("/api/todos/:id", (req, res) => {
   if (todo) {
     todo.done = req.body.done;
     res.json(todo);
-  } else res.status(404).send("Not found");
+  } else {
+    res.status(404).send("Not found");
+  }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server läuft auf Port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server läuft auf Port ${PORT}`);
+});
