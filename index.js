@@ -21,17 +21,10 @@ app.get("/api/todos", (req, res) => {
 //  POST
 app.post("/api/todos", (req, res) => {
   console.log("POST /api/todos", req.body);
-
-  const todo = {
-    id: Date.now(),
-    task: req.body.task,
-    done: false
-  };
-
+  const todo = { id: Date.now(), task: req.body.task, done: false };
   todos.push(todo);
   res.json(todo);
 });
-
 
 //  PUT
 app.put("/api/todos/:id", (req, res) => {
