@@ -1,41 +1,66 @@
 import express from "express";
 import cors from "cors";
-import bodyParser from "body-parser";
+import pg from "pg";
+
+const { Pool } = pg;
 
 const app = express();
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
-//  ROOT-ROUTE
-app.get("/", (req, res) => {
-  res.send("Backend läuft !");
+// Render Postgres DATABASE_URL
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
 });
 
-let todos = [];
+// Tabelle sicher anlegen
+async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS todos (
+      id SERIAL PRIMARY KEY,
+      task TEXT NOT NULL,
+      done BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `);
+}
+initDb().catch((e) => console.error("DB init error:", e));
 
-//  GET
-app.get("/api/todos", (req, res) => {
-  res.json(todos);
+// Root (damit / nicht mehr "Cannot GET /" zeigt)
+app.get("/", (req, res) => res.send("Backend läuft ✅"));
+
+// GET todos
+app.get("/api/todos", async (req, res) => {
+  const result = await pool.query("SELECT id, task, done FROM todos ORDER BY id ASC;");
+  res.json(result.rows);
 });
 
-//  POST
-app.post("/api/todos", (req, res) => {
-  console.log("POST /api/todos", req.body);
-  const todo = { id: Date.now(), task: req.body.task, done: false };
-  todos.push(todo);
-  res.json(todo);
+// POST todo
+app.post("/api/todos", async (req, res) => {
+  const { task } = req.body;
+  if (!task || !task.trim()) return res.status(400).json({ error: "task fehlt" });
+
+  const result = await pool.query(
+    "INSERT INTO todos (task, done) VALUES ($1, false) RETURNING id, task, done;",
+    [task.trim()]
+  );
+  res.json(result.rows[0]);
 });
 
-//  PUT
-app.put("/api/todos/:id", (req, res) => {
-  const todo = todos.find(t => t.id == req.params.id);
-  if (!todo) return res.status(404).send("Not found");
+// PUT done true/false
+app.put("/api/todos/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const { done } = req.body;
 
-  todo.done = req.body.done;
-  res.json(todo);
+  const result = await pool.query(
+    "UPDATE todos SET done = $1 WHERE id = $2 RETURNING id, task, done;",
+    [!!done, id]
+  );
+
+  if (result.rowCount === 0) return res.status(404).send("Not found");
+  res.json(result.rows[0]);
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("Server läuft auf Port", PORT);
-});
+app.listen(PORT, () => console.log(`Server läuft auf Port ${PORT}`));
