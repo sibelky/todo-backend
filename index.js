@@ -43,16 +43,17 @@ app.get("/api/todos", async (req, res) => {
 });
 
 // POST todo
-app.post("/api/todos", async (req, res) => {
-  const { task } = req.body;
-  if (!task || !task.trim()) return res.status(400).json({ error: "task fehlt" });
+app.post("/api/todos", (req, res) => {
+  const todo = { id: Date.now(), task: req.body.task, done: false };
+  todos.push(todo);
 
-  const result = await pool.query(
-    "INSERT INTO todos (task, done) VALUES ($1, FALSE) RETURNING id, task, done",
-    [task.trim()]
-  );
-  res.json(result.rows[0]);
+  console.log("Neues Todo erhalten:");
+  console.log(todo);
+  console.log("Aktueller Todo-Stand:", todos);
+
+  res.json(todo);
 });
+
 
 // PUT todo done/undone
 app.put("/api/todos/:id", async (req, res) => {
