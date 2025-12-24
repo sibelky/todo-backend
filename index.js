@@ -6,34 +6,39 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// ✅ NEU: Root-Route
+//  ROOT-ROUTE
 app.get("/", (req, res) => {
-  res.send("Backend läuft ✅");
+  res.send("Backend läuft !");
 });
 
 let todos = [];
 
+//  GET
 app.get("/api/todos", (req, res) => {
   res.json(todos);
 });
 
+//  POST
 app.post("/api/todos", (req, res) => {
-  const todo = { id: Date.now(), task: req.body.task, done: false };
+  const todo = {
+    id: Date.now(),
+    task: req.body.task,
+    done: false
+  };
   todos.push(todo);
   res.json(todo);
 });
 
+//  PUT
 app.put("/api/todos/:id", (req, res) => {
   const todo = todos.find(t => t.id == req.params.id);
-  if (todo) {
-    todo.done = req.body.done;
-    res.json(todo);
-  } else {
-    res.status(404).send("Not found");
-  }
+  if (!todo) return res.status(404).send("Not found");
+
+  todo.done = req.body.done;
+  res.json(todo);
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server läuft auf Port ${PORT}`);
+  console.log("Server läuft auf Port", PORT);
 });
