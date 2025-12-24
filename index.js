@@ -1,38 +1,44 @@
 import express from "express";
 import cors from "cors";
-import pg from "pg";
+import bodyParser from "body-parser";
+import pkg from "pg";
 
-const { Pool } = pg;
+const { Pool } = pkg;
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-// Render Postgres DATABASE_URL
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+// Loggt jede Request
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
+  next();
 });
 
-// Tabelle sicher anlegen
+// Root-Route
+app.get("/", (req, res) => res.send("Backend läuft"));
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+});
+
+// Tabelle anlegen, falls noch nicht da
 async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS todos (
-      id SERIAL PRIMARY KEY,
+      id BIGSERIAL PRIMARY KEY,
       task TEXT NOT NULL,
-      done BOOLEAN NOT NULL DEFAULT false,
-      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      done BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
 }
-initDb().catch((e) => console.error("DB init error:", e));
-
-// Root (damit / nicht mehr "Cannot GET /" zeigt)
-app.get("/", (req, res) => res.send("Backend läuft ✅"));
+initDb().catch(console.error);
 
 // GET todos
 app.get("/api/todos", async (req, res) => {
-  const result = await pool.query("SELECT id, task, done FROM todos ORDER BY id ASC;");
+  const result = await pool.query("SELECT id, task, done FROM todos ORDER BY id DESC");
   res.json(result.rows);
 });
 
@@ -42,19 +48,19 @@ app.post("/api/todos", async (req, res) => {
   if (!task || !task.trim()) return res.status(400).json({ error: "task fehlt" });
 
   const result = await pool.query(
-    "INSERT INTO todos (task, done) VALUES ($1, false) RETURNING id, task, done;",
+    "INSERT INTO todos (task, done) VALUES ($1, FALSE) RETURNING id, task, done",
     [task.trim()]
   );
   res.json(result.rows[0]);
 });
 
-// PUT done true/false
+// PUT todo done/undone
 app.put("/api/todos/:id", async (req, res) => {
-  const id = Number(req.params.id);
   const { done } = req.body;
+  const { id } = req.params;
 
   const result = await pool.query(
-    "UPDATE todos SET done = $1 WHERE id = $2 RETURNING id, task, done;",
+    "UPDATE todos SET done = $1 WHERE id = $2 RETURNING id, task, done",
     [!!done, id]
   );
 
