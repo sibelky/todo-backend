@@ -27,12 +27,20 @@ const pool = new Pool({
 async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS todos (
-      id BIGSERIAL PRIMARY KEY,
+      id SERIAL PRIMARY KEY,
       task TEXT NOT NULL,
-      done BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      done BOOLEAN NOT NULL DEFAULT false,
+      urgent BOOLEAN NOT NULL DEFAULT false
     );
   `);
+
+  // Falls Tabelle schon existiert, aber Spalte noch nicht
+  await pool.query(`
+    ALTER TABLE todos
+    ADD COLUMN IF NOT EXISTS urgent BOOLEAN NOT NULL DEFAULT false;
+  `);
+}
+
 }
 initDb().catch(console.error);
 
