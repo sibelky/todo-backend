@@ -50,7 +50,7 @@ initDb().catch((err) => {
 app.get("/api/todos", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, task, done, urgent FROM todos ORDER BY id DESC"
+      "SELECT id, task, done, urgent, deadline FROM todos ORDER BY id DESC"
     );
     res.json(result.rows);
   } catch (err) {
@@ -62,14 +62,14 @@ app.get("/api/todos", async (req, res) => {
 // POST todo (urgent default false)
 app.post("/api/todos", async (req, res) => {
   try {
-    const { task } = req.body;
+    const { task, deadline } = req.body;
     if (!task || !task.trim()) {
       return res.status(400).json({ error: "task fehlt" });
     }
 
     const result = await pool.query(
-      "INSERT INTO todos (task, done, urgent) VALUES ($1, FALSE, FALSE) RETURNING id, task, done, urgent",
-      [task.trim()]
+      "INSERT INTO todos (task, done, urgent, deadline) VALUES ($1, FALSE, FALSE) RETURNING id, task, done, urgent, deadline",
+      [task.trim(), deadline || null]
     );
 
     res.status(201).json(result.rows[0]);
@@ -85,6 +85,7 @@ app.put("/api/todos/:id", async (req, res) => {
     const id = Number(req.params.id);
     const done = req.body?.done;
     const urgent = req.body?.urgent;
+    const deadline = req.body?.deadline;
 
     const result = await pool.query(
       `
@@ -92,7 +93,8 @@ app.put("/api/todos/:id", async (req, res) => {
       SET
         done = COALESCE($1, done),
         urgent = COALESCE($2, urgent)
-      WHERE id = $3
+        deadlinde = COALESCE($3, deadline)
+      WHERE id = $4
       RETURNING id, task, done, urgent
       `,
       [done, urgent, id]
