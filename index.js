@@ -15,65 +15,94 @@ app.use((req, res, next) => {
   next();
 });
 
-// Root-Route
-app.get("/", (req, res) => res.send("Backend läuft"));
+// Root-Route (damit / nicht "Cannot GET /" zeigt)
+app.get("/", (req, res) => res.send("Backend läuft ✅"));
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
-// Tabelle anlegen, falls noch nicht da
+// Tabelle anlegen (und urgent-Spalte absichern)
 async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS todos (
       id SERIAL PRIMARY KEY,
       task TEXT NOT NULL,
-      done BOOLEAN NOT NULL DEFAULT false,
-      urgent BOOLEAN NOT NULL DEFAULT false
+      done BOOLEAN NOT NULL DEFAULT FALSE,
+      urgent BOOLEAN NOT NULL DEFAULT FALSE
     );
   `);
 
-  // Falls Tabelle schon existiert, aber Spalte noch nicht
+  // Für den Fall, dass die Tabelle alt ist und urgent noch fehlt
   await pool.query(`
     ALTER TABLE todos
-    ADD COLUMN IF NOT EXISTS urgent BOOLEAN NOT NULL DEFAULT false;
+    ADD COLUMN IF NOT EXISTS urgent BOOLEAN NOT NULL DEFAULT FALSE;
   `);
 }
 
-}
-initDb().catch(console.error);
+initDb().catch((err) => {
+  console.error("DB init error:", err);
+});
 
-// GET todos
+// GET todos (inkl. urgent!)
 app.get("/api/todos", async (req, res) => {
-  const result = await pool.query("SELECT id, task, done FROM todos ORDER BY id DESC");
-  res.json(result.rows);
+  try {
+    const result = await pool.query(
+      "SELECT id, task, done, urgent FROM todos ORDER BY id DESC"
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("GET /api/todos error:", err);
+    res.status(500).json({ error: "DB Fehler" });
+  }
 });
 
-// POST todo
+// POST todo (urgent default false)
 app.post("/api/todos", async (req, res) => {
-  const { task } = req.body;
-  if (!task || !task.trim()) return res.status(400).json({ error: "task fehlt" });
+  try {
+    const { task } = req.body;
+    if (!task || !task.trim()) {
+      return res.status(400).json({ error: "task fehlt" });
+    }
 
-  const result = await pool.query(
-    "INSERT INTO todos (task, done) VALUES ($1, FALSE) RETURNING id, task, done",
-    [task.trim()]
-  );
-  res.json(result.rows[0]);
+    const result = await pool.query(
+      "INSERT INTO todos (task, done, urgent) VALUES ($1, FALSE, FALSE) RETURNING id, task, done, urgent",
+      [task.trim()]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error("POST /api/todos error:", err);
+    res.status(500).json({ error: "DB Fehler" });
+  }
 });
 
-// PUT todo done/undone
+// PUT todo (done und/oder urgent updaten)
 app.put("/api/todos/:id", async (req, res) => {
-  const { done } = req.body;
-  const { id } = req.params;
+  try {
+    const id = Number(req.params.id);
+    const done = req.body?.done;
+    const urgent = req.body?.urgent;
 
-  const result = await pool.query(
-    "UPDATE todos SET done = $1 WHERE id = $2 RETURNING id, task, done",
-    [!!done, id]
-  );
+    const result = await pool.query(
+      `
+      UPDATE todos
+      SET
+        done = COALESCE($1, done),
+        urgent = COALESCE($2, urgent)
+      WHERE id = $3
+      RETURNING id, task, done, urgent
+      `,
+      [done, urgent, id]
+    );
 
-  if (result.rowCount === 0) return res.status(404).send("Not found");
-  res.json(result.rows[0]);
+    if (result.rowCount === 0) return res.status(404).send("Not found");
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("PUT /api/todos/:id error:", err);
+    res.status(500).json({ error: "DB Fehler" });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
