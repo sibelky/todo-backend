@@ -30,14 +30,15 @@ async function initDb() {
       id SERIAL PRIMARY KEY,
       task TEXT NOT NULL,
       done BOOLEAN NOT NULL DEFAULT FALSE,
-      urgent BOOLEAN NOT NULL DEFAULT FALSE
+      urgent BOOLEAN NOT NULL DEFAULT FALSE,
+      deadline DATE
     );
   `);
 
-  // Für den Fall, dass die Tabelle alt ist und urgent noch fehlt
   await pool.query(`
     ALTER TABLE todos
     ADD COLUMN IF NOT EXISTS urgent BOOLEAN NOT NULL DEFAULT FALSE;
+    ADD COLUMN IF NOT EXISTS deadline DATE;
   `);
 }
 
@@ -45,7 +46,7 @@ initDb().catch((err) => {
   console.error("DB init error:", err);
 });
 
-// GET todos (inkl. urgent!)
+// GET todos (inkl. urgent)
 app.get("/api/todos", async (req, res) => {
   try {
     const result = await pool.query(
