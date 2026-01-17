@@ -106,6 +106,23 @@ app.put("/api/todos/:id", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "DB Fehler" });
   }
+  // DELETE todo (endgültig löschen)
+  app.delete("/api/todos/:id", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+
+      const result = await pool.query(
+        "DELETE FROM todos WHERE id = $1 RETURNING id",
+        [id]
+      );
+
+      if (result.rowCount === 0) return res.status(404).send("Not found");
+      res.json({ success: true, id });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "DB Fehler" });
+    }
+  });
 });
 
 const PORT = process.env.PORT || 3000;
