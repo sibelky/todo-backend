@@ -23,33 +23,38 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
-// Tabelle anlegen + Spalten absichern
+// Tabelle anlegen + Spalten absichern (ohne Deploy-Crash)
 async function initDb() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS todos (
-      id SERIAL PRIMARY KEY,
-      task TEXT NOT NULL,
-      done BOOLEAN NOT NULL DEFAULT FALSE,
-      urgent BOOLEAN NOT NULL DEFAULT FALSE,
-      deadline DATE
-    );
-  `);
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS todos (
+        id SERIAL PRIMARY KEY,
+        task TEXT NOT NULL,
+        done BOOLEAN NOT NULL DEFAULT FALSE,
+        urgent BOOLEAN NOT NULL DEFAULT FALSE,
+        deadline DATE
+      );
+    `);
 
-  // Falls Tabelle schon existiert, aber Spalten fehlen (alte DB)
-  await pool.query(`
-    ALTER TABLE todos
-    ADD COLUMN IF NOT EXISTS urgent BOOLEAN NOT NULL DEFAULT FALSE;
-  `);
+    // Für alte Tabellen: Spalten einzeln nachziehen
+    await pool.query(`
+      ALTER TABLE todos
+      ADD COLUMN IF NOT EXISTS urgent BOOLEAN NOT NULL DEFAULT FALSE;
+    `);
 
-  await pool.query(`
-    ALTER TABLE todos
-    ADD COLUMN IF NOT EXISTS deadline DATE;
-  `);
+    await pool.query(`
+      ALTER TABLE todos
+      ADD COLUMN IF NOT EXISTS deadline DATE;
+    `);
+
+    console.log("DB init erfolgreich ✅");
+  } catch (err) {
+    // Wichtig: NICHT crashen lassen, sonst Render Deploy failed
+    console.error("DB init Fehler (Server läuft trotzdem weiter):", err.message);
+  }
 }
 
-initDb().catch((err) => {
-  console.error("DB init error:", err);
-});
+initDb();
 
 // GET todos
 app.get("/api/todos", async (req, res) => {
@@ -64,7 +69,7 @@ app.get("/api/todos", async (req, res) => {
   }
 });
 
-// POST todo
+// POST todo (task + optional deadline)
 app.post("/api/todos", async (req, res) => {
   try {
     const { task, deadline } = req.body;
@@ -85,7 +90,7 @@ app.post("/api/todos", async (req, res) => {
   }
 });
 
-// PUT todo (done/urgent/deadline)
+// PUT todo (done/urgent/deadline optional updaten)
 app.put("/api/todos/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
