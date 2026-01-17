@@ -9,13 +9,13 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// Loggt jede Request
+// Request-Logging (sicher, ohne Template-Strings)
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
+  console.log(new Date().toISOString(), req.method, req.url);
   next();
 });
 
-// Root-Route
+// Root
 app.get("/", (req, res) => res.send("Backend läuft ✅"));
 
 const pool = new Pool({
@@ -23,7 +23,7 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
-// Tabelle anlegen + Spalten absichern (ohne Deploy-Crash)
+// DB init (nur urgent, KEINE deadline)
 async function initDb() {
   try {
     await pool.query(`
@@ -31,26 +31,18 @@ async function initDb() {
         id SERIAL PRIMARY KEY,
         task TEXT NOT NULL,
         done BOOLEAN NOT NULL DEFAULT FALSE,
-        urgent BOOLEAN NOT NULL DEFAULT FALSE,
-        deadline DATE
+        urgent BOOLEAN NOT NULL DEFAULT FALSE
       );
     `);
 
-    // Für alte Tabellen: Spalten einzeln nachziehen
     await pool.query(`
       ALTER TABLE todos
       ADD COLUMN IF NOT EXISTS urgent BOOLEAN NOT NULL DEFAULT FALSE;
     `);
 
-    await pool.query(`
-      ALTER TABLE todos
-      ADD COLUMN IF NOT EXISTS deadline DATE;
-    `);
-
-    console.log("DB init erfolgreich ✅");
+    console.log("DB init OK");
   } catch (err) {
-    // Wichtig: NICHT crashen lassen, sonst Render Deploy failed
-    console.error("DB init Fehler (Server läuft trotzdem weiter):", err.message);
+    console.error("DB init error (ignored):", err.message);
   }
 }
 
@@ -60,64 +52,61 @@ initDb();
 app.get("/api/todos", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, task, done, urgent, deadline FROM todos ORDER BY id DESC"
+      "SELECT id, task, done, urgent FROM todos ORDER BY id DESC"
     );
     res.json(result.rows);
   } catch (err) {
-    console.error("GET /api/todos error:", err);
+    console.error(err);
     res.status(500).json({ error: "DB Fehler" });
   }
 });
 
-// POST todo (task + optional deadline)
+// POST todo
 app.post("/api/todos", async (req, res) => {
   try {
-    const { task, deadline } = req.body;
-
+    const { task } = req.body;
     if (!task || !task.trim()) {
       return res.status(400).json({ error: "task fehlt" });
     }
 
     const result = await pool.query(
-      "INSERT INTO todos (task, done, urgent, deadline) VALUES ($1, FALSE, FALSE, $2) RETURNING id, task, done, urgent, deadline",
-      [task.trim(), deadline || null]
+      "INSERT INTO todos (task, done, urgent) VALUES ($1, FALSE, FALSE) RETURNING id, task, done, urgent",
+      [task.trim()]
     );
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error("POST /api/todos error:", err);
+    console.error(err);
     res.status(500).json({ error: "DB Fehler" });
   }
 });
 
-// PUT todo (done/urgent/deadline optional updaten)
+// PUT todo (done / urgent)
 app.put("/api/todos/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
     const done = req.body?.done;
     const urgent = req.body?.urgent;
-    const deadline = req.body?.deadline;
 
     const result = await pool.query(
       `
       UPDATE todos
       SET
         done = COALESCE($1, done),
-        urgent = COALESCE($2, urgent),
-        deadline = COALESCE($3, deadline)
-      WHERE id = $4
-      RETURNING id, task, done, urgent, deadline
+        urgent = COALESCE($2, urgent)
+      WHERE id = $3
+      RETURNING id, task, done, urgent
       `,
-      [done, urgent, deadline, id]
+      [done, urgent, id]
     );
 
     if (result.rowCount === 0) return res.status(404).send("Not found");
     res.json(result.rows[0]);
   } catch (err) {
-    console.error("PUT /api/todos/:id error:", err);
+    console.error(err);
     res.status(500).json({ error: "DB Fehler" });
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(Server läuft auf Port ${PORT}));
+app.listen(PORT, () => console.log(`Server läuft auf Port ${PORT}`));
