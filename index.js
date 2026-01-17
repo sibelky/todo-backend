@@ -9,21 +9,21 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// Request-Logging (sicher, ohne Template-Strings)
+// Request-Logging
 app.use((req, res, next) => {
   console.log(new Date().toISOString(), req.method, req.url);
   next();
 });
 
 // Root
-app.get("/", (req, res) => res.send("Backend läuft ✅"));
+app.get("/", (req, res) => res.send("Backend läuft !"));
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
-// DB init (nur urgent, KEINE deadline)
+// DB init
 async function initDb() {
   try {
     await pool.query(`
