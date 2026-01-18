@@ -1,0 +1,26 @@
+name: Backend Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v4
+
+      - name: Node installieren
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Dependencies installieren
+        run: npm install
+
+      - name: Tests ausführen
+        run: npm test
+        env:
+          NODE_ENV: test

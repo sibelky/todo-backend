@@ -18,10 +18,19 @@ app.use((req, res, next) => {
 // Root
 app.get("/", (req, res) => res.send("Backend läuft !"));
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
-});
+let pool;
+
+if (process.env.NODE_ENV === "test") {
+  // Fake-DB für Tests
+  pool = {
+    query: async (sql, params) => global.poolMock.query(sql, params)
+  };
+} else {
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+  });
+}
 
 // DB init
 async function initDb() {
@@ -35,13 +44,15 @@ async function initDb() {
       );
     `);
 
-    console.log("DB init OK");
+    console.log("DB init OK ");
   } catch (err) {
     console.error("DB init error (ignored):", err.message);
   }
 }
 
-initDb();
+if (process.env.NODE_ENV !== "test") {
+  initDb();
+}
 
 // GET todos
 app.get("/api/todos", async (req, res) => {
@@ -51,7 +62,7 @@ app.get("/api/todos", async (req, res) => {
     );
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
+    console.error("GET /api/todos error:", err);
     res.status(500).json({ error: "DB Fehler" });
   }
 });
@@ -60,6 +71,7 @@ app.get("/api/todos", async (req, res) => {
 app.post("/api/todos", async (req, res) => {
   try {
     const { task } = req.body;
+
     if (!task || !task.trim()) {
       return res.status(400).json({ error: "task fehlt" });
     }
@@ -71,7 +83,7 @@ app.post("/api/todos", async (req, res) => {
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error(err);
+    console.error("POST /api/todos error:", err);
     res.status(500).json({ error: "DB Fehler" });
   }
 });
@@ -97,29 +109,35 @@ app.put("/api/todos/:id", async (req, res) => {
 
     if (result.rowCount === 0) return res.status(404).send("Not found");
     res.json(result.rows[0]);
-  }
-  catch (err) {
-    console.error(err);
+  } catch (err) {
+    console.error("PUT /api/todos/:id error:", err);
     res.status(500).json({ error: "DB Fehler" });
   }
 });
 
 // DELETE todo (endgültig löschen)
-  app.delete("/api/todos/:id", async (req, res) => {
-    try {
-      const id = Number(req.params.id);
+app.delete("/api/todos/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
 
-      const result = await pool.query(
-        "DELETE FROM todos WHERE id = $1 RETURNING id",
-        [id]
-      );
+    const result = await pool.query(
+      "DELETE FROM todos WHERE id = $1 RETURNING id",
+      [id]
+    );
 
-      if (result.rowCount === 0) return res.status(404).send("Not found");
-      res.json({ success: true, id });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "DB Fehler" });
-    }
-  });
+    if (result.rowCount === 0) return res.status(404).send("Not found");
+    res.json({ success: true, id });
+  } catch (err) {
+    console.error("DELETE /api/todos/:id error:", err);
+    res.status(500).json({ error: "DB Fehler" });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server läuft auf Port ${PORT}`));
+
+// Wichtig: beim Testen KEIN listen()
+if (process.env.NODE_ENV !== "test") {
+  app.listen(PORT, () => console.log(`Server läuft auf Port ${PORT}`));
+}
+
+export default app;
