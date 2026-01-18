@@ -35,11 +35,6 @@ async function initDb() {
       );
     `);
 
-    await pool.query(`
-      ALTER TABLE todos
-      ADD COLUMN IF NOT EXISTS urgent BOOLEAN NOT NULL DEFAULT FALSE;
-    `);
-
     console.log("DB init OK");
   } catch (err) {
     console.error("DB init error (ignored):", err.message);
@@ -102,11 +97,14 @@ app.put("/api/todos/:id", async (req, res) => {
 
     if (result.rowCount === 0) return res.status(404).send("Not found");
     res.json(result.rows[0]);
-  } catch (err) {
+  }
+  catch (err) {
     console.error(err);
     res.status(500).json({ error: "DB Fehler" });
   }
-  // DELETE todo (endgültig löschen)
+});
+
+// DELETE todo (endgültig löschen)
   app.delete("/api/todos/:id", async (req, res) => {
     try {
       const id = Number(req.params.id);
@@ -123,7 +121,5 @@ app.put("/api/todos/:id", async (req, res) => {
       res.status(500).json({ error: "DB Fehler" });
     }
   });
-});
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server läuft auf Port ${PORT}`));
